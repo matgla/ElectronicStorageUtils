@@ -1,2 +1,4 @@
-mouser
 requests
+pandas
+qrcode
+pillow
