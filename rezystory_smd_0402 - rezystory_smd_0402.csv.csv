@@ -1,0 +1,22 @@
+Image,Value,Unit,Amount,Description,Termination,Package,Datasheet,Manufacturer,Tolerance,Power,Category,Box,Code
+Name,,Unit,,,,Case,,,,,,Name,
+,1,kΩ,100,50V,SMD,S2,https://datasheet.lcsc.com/lcsc/1809301716_YAGEO-RC0402FR-071KL_C106235.pdf,YAGEO,"1,00%",62.5mW,Resistor,Resistor SMD Box 0402,RC0402FR-071KL
+,120,,,,,,https://www.mouser.pl/datasheet/2/447/PYu_AC_51_RoHS_L_9-3005297.pdf,,,,Resistor,,AC0402FR-07120KL
+,"3,3",,,,,,https://datasheet.lcsc.com/lcsc/1809301716_YAGEO-RC0402FR-071KL_C106235.pdf,,,,Resistor,,RC0402FR-073K3L
+,22,,,,,,,,,,Resistor,,RC0402FR-0722KL
+,68,,,,,,,,,,Resistor,,RC0402FR-0768KL
+,"5,6",,,,,,,,,,Resistor,,RC0402FR-075K6L
+,100,,,,,,,,,,Resistor,,RC0402FR-07100KL
+,"4,7",Ω,,,,,,,,,Resistor,,RC0402FR-074R7L
+,"4,7",kΩ,,,,,,,,,Resistor,,RC0402FR-074K7L
+,"27,4",Ω,,,,,,,,,Resistor,,RC0402FR-0727R4L
+,10,kΩ,,,,,,,,,Resistor,,RC0402FR-0710KL
+,619,Ω,,,,,,,,,Resistor,,RC0402FR-07619RL
+,309,,,,,,https://www.mouser.pl/datasheet/2/447/PYu_AC_51_RoHS_L_9-3005297.pdf,,,,Resistor,,AC0402FR-07309RL
+,"97,6",,,,,,https://datasheet.lcsc.com/lcsc/1809301716_YAGEO-RC0402FR-071KL_C106235.pdf,,,,Resistor,,RC0402FR-0797R6L
+,536,,,,,,,,,,Resistor,,RC0402FR-07536RL
+,47,,,,,,,,,,Resistor,,RC0402FR-0747RL
+,267,,,,,,,,,,Resistor,,RC0402FR-07267RL
+,105,,,,,,,,,,Resistor,,RC0402FR-07105RL
+,0,,,,,,,,,,Resistor,,RC0402FR-070RL
+,270,,,,,,,,,,Resistor,,RC0402FR-07270RL
