@@ -24,7 +24,7 @@ def get_item(table, selector):
     data = {
         "Action": "Find",
         "Properties": {
-            "Selector": 'Filter(' + table + ', ' + selector + ')', 
+            "Selector": selector, 
         },
         "Rows": []
     }

@@ -47,6 +47,49 @@ def database_get_table(table):
 
     return cache[table]
 
+def database_get_item(table, selector):
+    api_url = "https://api.appsheet.com/api/v2/apps/" + applicationId + "/tables/" + table + "/Action"
+    data = {
+        "Action": "Find",
+        "Properties": {
+            "Selector": selector
+        },
+        "Rows": []
+    }
+    entry = table + str(hash(selector))
+    if not entry in cache:
+        resp = requests.post(api_url, data=json.dumps(data), headers=headers)
+        if (resp.status_code != 200): 
+            print("Can't access table: " + table + " in external database")
+            return {}
+
+
+        if (resp.content == None or len(resp.content) == 0):
+            print("Empty table returned from database for: " + table)
+            return {}
+   
+        cache[entry] = json.loads(resp.content) 
+
+    return cache[entry]
+
+def database_add_entry(table, data):
+    api_url = "https://api.appsheet.com/api/v2/apps/" + applicationId + "/tables/" + table + "/Action"
+    data = {
+        "Action": "Add",
+        "Properties": {
+        },
+        "Rows": data
+    }
+    resp = requests.post(api_url, data=json.dumps(data), headers=headers)
+    if (resp.status_code != 200): 
+        print("Adding entry in table: " + table + " failed for: ", data)
+        print(resp)
+        print(resp.content)
+        return True
+    return False
+
+
+
 
 component_codes_mapping = None
 def database_get_component_codes_mapping():
