@@ -26,18 +26,30 @@ import PIL
 argparser = argparse.ArgumentParser(
     "QRCode and text label generator, with automatically appsheet update"
 )
-argparser.add_argument("--input", "-i", help="CSV file input with | separator", required=True)
+argparser.add_argument(
+    "--input", "-i", help="CSV file input with | separator", required=True
+)
 argparser.add_argument("--output", "-o", help="Output filename", required=True)
-argparser.add_argument("--qrcode", "-q", action="store_true", help="Generate QRCode image", required=False)
-argparser.add_argument("--post", "-p", action="store_true", help="POST CSV to database", required=False)
+argparser.add_argument(
+    "--qrcode", "-q", action="store_true", help="Generate QRCode image", required=False
+)
+argparser.add_argument(
+    "--post", "-p", action="store_true", help="POST CSV to database", required=False
+)
 argparser.add_argument("--api_key", "-k", help="JSON file with API keys", required=True)
 argparser.add_argument(
     "--tape_height", "-t", help="Printer type height in pixels", required=True
 )
 argparser.add_argument("--font", "-f", help="Text font")
-argparser.add_argument("--font_size", "-fs", type=int, default=12, help="Text font size")
-argparser.add_argument("--font_weight", "-fw", default="Regular", help="Text font weight: regular/italic/bold")
-
+argparser.add_argument(
+    "--font_size", "-fs", type=int, default=12, help="Text font size"
+)
+argparser.add_argument(
+    "--font_weight",
+    "-fw",
+    default="Regular",
+    help="Text font weight: regular/italic/bold",
+)
 
 
 args, _ = argparser.parse_known_args()
@@ -63,12 +75,13 @@ def build_barcode_text(element):
 def build_tape_image(qrcodes, labels):
     widths, heights = zip(*(i.size for i in qrcodes))
     text_widths, text_heights = zip(*(i.size for i in labels))
-    separator_width = 5 
+    separator_width = 5
     total_width = (
         sum(widths)
         + separator_width * len(qrcodes)
         + sum(text_widths)
-        + len(labels) * separator_width)
+        + len(labels) * separator_width
+    )
 
     tape_height = int(args.tape_height)
     tape = Image.new("RGB", (total_width, tape_height), (255, 255, 255))
@@ -86,7 +99,7 @@ def build_tape_image(qrcodes, labels):
 
 def build_label_text(element):
     label = ""
-    if "Label" in element and element["Label"] != "": 
+    if "Label" in element and element["Label"] != "":
         label = element["Label"]
     elif "Value" in element and element["Value"] != "":
         label = element["Value"]
@@ -124,7 +137,7 @@ labels = []
 
 font = None
 if args.font:
-    for filename in matplotlib.font_manager.findSystemFonts(): 
+    for filename in matplotlib.font_manager.findSystemFonts():
         try:
             test_font = ImageFont.FreeTypeFont(filename)
             name, weight = test_font.getname()
@@ -134,9 +147,14 @@ if args.font:
         except OSError:
             pass
 
-    
     if font == None:
-        print("Can't find font \"" + args.font + "\": " + args.font_weight + " - using system default")
+        print(
+            "Can't find font \""
+            + args.font
+            + '": '
+            + args.font_weight
+            + " - using system default"
+        )
 
 first_row = {}
 
@@ -144,13 +162,13 @@ with open(args.input, "r") as file:
     print("Processing file: " + args.input)
     reader = pd.read_csv(file)
     data = json.loads(reader.to_json())
-    
+
     elements = []
     for entry in data:
-        for key in data[entry]: 
+        for key in data[entry]:
             if key == "0":
                 first_row[entry] = data[entry][key]
-                continue 
+                continue
 
             if int(key) > len(elements):
                 elements.append({})
@@ -160,9 +178,8 @@ with open(args.input, "r") as file:
         elements[i]["BarCode"] = build_barcode_text(elements[i])
 
 
-
 if args.qrcode:
-    for element in elements: 
+    for element in elements:
         qrcodes.append(generate_qrcode(element["BarCode"]))
         labels.append(text_to_image(build_label_text(element), font, args.font_size))
 
@@ -170,33 +187,50 @@ if args.qrcode:
     image.save(args.output)
 
 if args.post:
-    print(first_row)
     for i in range(0, len(elements)):
         keys_to_remove = []
         for key in elements[i]:
-            if key in first_row and first_row[key] != None and len(first_row[key].strip()) != 0:
+            if (
+                key in first_row
+                and first_row[key] != None
+                and len(first_row[key].strip()) != 0
+            ):
+                if database_get_item(
+                    "Items", lambda a: a["Code"] == elements[i]["Code"]
+                ):
+                    continue
                 print("Fixing key: ", key, "with: ", first_row[key])
                 if "ref:" in first_row[key].lower():
                     data = first_row[key].split(":")
                     if len(data) < 2:
-                        print("No table or column provided, expected format: ref:<table>:<column>")
-                        exit(-1) 
-                    table = data[1] 
+                        print(
+                            "No table or column provided, expected format: ref:<table>:<column>"
+                        )
+                        exit(-1)
+                    table = data[1]
                     column = data[2]
-                    selector = "FILTER(" + table + ", [" + column + "] = \"" + elements[i][key] + '")'
-                    r = database_get_item(table, selector)
-                    print("Fixing reference from table: " + table + ", column: " + column)
-                    if (len(r) < 1):
+                    r = database_get_item(
+                        table, lambda a: a[column] == elements[i][key]
+                    )
+
+                    print(
+                        "Fixing reference from table: " + table + ", column: " + column
+                    )
+                    if r is None:
                         print("Referenced value not found")
-                    elements[i][key] = r[0]["Row ID"]        
+                        exit(-1)
+                    elements[i][key] = r["Row ID"]
 
                 if first_row[key].lower() == "int":
                     elements[i][key] = str(int(elements[i][key]))
 
                 if first_row[key].lower() == "none":
                     keys_to_remove.append(key)
-        for key in keys_to_remove: 
+        for key in keys_to_remove:
             del elements[i][key]
 
-    if database_add_entry("Items", elements):
-        print("POST Successful!")
+        print("Posting ID: ", i)
+        if database_add_entry("Items", [elements[i]]):
+            print("POST Successful!")
+        else:
+            exit(-1)
