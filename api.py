@@ -93,14 +93,18 @@ def database_add_entry(table, data):
         + table
         + "/Action"
     )
-    data = {"Action": "Add", "Properties": {}, "Rows": data}
-    resp = requests.post(api_url, data=json.dumps(data), headers=headers)
+    print("Posting: ", data)
+    post_data = {"Action": "Add", "Properties": {}, "Rows": data}
+    resp = requests.post(api_url, data=json.dumps(post_data), headers=headers)
 
     if resp.status_code != 200:
-        print("Adding entry in table: " + table + " failed for: ", data)
+        print("Adding entry in table: " + table + " failed for: ", post_data)
         print(resp)
         print(resp.content)
         return False
+    print(resp)
+    print(resp.content)
+    
     return True
 
 

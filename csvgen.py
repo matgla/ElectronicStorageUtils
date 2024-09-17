@@ -14,6 +14,7 @@ from api import database_get_item
 import pandas as pd
 import matplotlib.font_manager
 import json
+import re
 
 from sys import exit
 
@@ -29,26 +30,39 @@ argparser = argparse.ArgumentParser(
 argparser.add_argument(
     "--input", "-i", help="CSV file input with | separator", required=True
 )
-argparser.add_argument("--output", "-o", help="Output filename", required=True)
 argparser.add_argument(
-    "--qrcode", "-q", action="store_true", help="Generate QRCode image", required=False
+    "--qrcode", "-q", help="Generate QRCode image", required=False
 )
+argparser.add_argument(
+    "--qrcode_pixel", "-qs", help="QRCode pixel size", default=2, type=int, required=False
+)
+
 argparser.add_argument(
     "--post", "-p", action="store_true", help="POST CSV to database", required=False
 )
+argparser.add_argument(
+    "--only_label", "-ol", action="store_true", help="Generate only labels without QRCodes"
+)
+argparser.add_argument(
+    "--separator", "-sw", type=int, default=10, help="Separator width between elements in pixels"
+)
 argparser.add_argument("--api_key", "-k", help="JSON file with API keys", required=True)
 argparser.add_argument(
-    "--tape_height", "-t", help="Printer type height in pixels", required=True
+    "--tape_height", "-t", type=int, default=76, help="Printer type height in pixels"
 )
 argparser.add_argument("--font", "-f", help="Text font")
 argparser.add_argument(
-    "--font_size", "-fs", type=int, default=12, help="Text font size"
+    "--font_size", "-fs", type=int, default=24, help="Text font size"
 )
+argparser.add_argument("-font_height_offset", "-fho", type=int, default=0, help="Font offset to fix offset in font")
 argparser.add_argument(
     "--font_weight",
     "-fw",
     default="Regular",
     help="Text font weight: regular/italic/bold",
+)
+argparser.add_argument(
+    "--label_format", "-lf", help="Label format, CSV columns may be accessed via ::, example \'Resistor :Value: :Unit:\' will for example produce label like 'Resistor 123 Ohm'"
 )
 
 
@@ -72,40 +86,69 @@ def build_barcode_text(element):
     )
 
 
-def build_tape_image(qrcodes, labels):
-    widths, heights = zip(*(i.size for i in qrcodes))
-    text_widths, text_heights = zip(*(i.size for i in labels))
-    separator_width = 5
+def build_tape_image(qrcodes, labels, rotated):
+    widths = []
+    text_widths = [] 
+    if not args.only_label:
+        widths, _ = zip(*(i.size for i in qrcodes))
+    if not args.label_format == None and not args.label_format.strip() == "": 
+        text_widths, _ = zip(*(i.size for i in labels))
+
+    separator_width = args.separator
+    
     total_width = (
         sum(widths)
-        + separator_width * len(qrcodes)
         + sum(text_widths)
-        + len(labels) * separator_width
     )
-
+    if not args.only_label:
+        total_width += separator_width * len(qrcodes)
+    if not args.label_format == None and not args.label_format.strip() == "": 
+        total_width += len(labels) * separator_width
     tape_height = int(args.tape_height)
     tape = Image.new("RGB", (total_width, tape_height), (255, 255, 255))
     x_offset = 0
-    for i in range(0, len(labels)):
-        qr = qrcodes[i]
-        label = labels[i]
-        tape.paste(qr, (x_offset, int((tape_height - qr.size[1]) / 2)))
-        x_offset += qr.size[0] + separator_width
-        tape.paste(label, (x_offset, int((tape_height - label.size[1]) / 2)))
-        x_offset += label.size[0] + separator_width
+    size = len(qrcodes)
+    if len(labels) > size:
+        size = len(labels)
+
+    for i in range(0, size):
+        qr = None
+        label = None
+        if i < len(qrcodes): 
+            qr = qrcodes[i]
+        if i < len(labels): 
+            label = labels[i]
+
+        if not args.only_label and qr is not None:
+            tape.paste(qr, (x_offset, int((tape_height - qr.size[1]) / 2)))
+            x_offset += qr.size[0] + separator_width
+      
+        if label is not None and not args.label_format is None and not args.label_format == "": 
+            tape.paste(label, (x_offset, int((tape_height - label.size[1]) / 2) + args.font_height_offset))
+            print (label.size[0], label.size[1])
+            x_offset += label.size[0] + separator_width
 
     return tape
 
 
 def build_label_text(element):
-    label = ""
-    if "Label" in element and element["Label"] != "":
-        label = element["Label"]
-    elif "Value" in element and element["Value"] != "":
-        label = element["Value"]
-        if "Unit" in element and element["Unit"] != "":
-            label += element["Unit"]
-    return label
+    if args.label_format == None or args.label_format.strip() == "":
+        return ""
+
+    label = args.label_format
+
+    placeholders = re.findall(r':(.*?):', args.label_format)
+    for placeholder in placeholders:
+        key = placeholder.replace(":", "")
+        if not key in element:
+            print ("Key '" + key + "' not found in element:", element)
+        value = element[key] 
+        if value == None:
+            value = ""
+        value = value.strip()
+        label = label.replace(":" + key + ":", value)        
+
+    return label 
 
 
 # https://stackoverflow.com/a/72615170
@@ -117,23 +160,34 @@ def text_to_image(text, font_path=None, font_size=24, font_align="center"):
 
     timg = Image.new("RGB", (2, 2), (255, 255, 255))
     d = ImageDraw.Draw(timg)
+    rotate = False 
+    width = int(d.textlength(text, font)) + 2 
+    if width < int(args.tape_height):
+        height = font_size
+        rotate = True
+    else:
+        height = args.tape_height#font_size
+        rotate = False 
 
-    width = int(d.textlength(text, font)) + 2
-    height = font_size
+    if abs(args.font_height_offset) > 0:
+        height += abs(args.font_height_offset)
 
     img = Image.new("RGB", (width, height), (255, 255, 255))
     draw = ImageDraw.Draw(img)
-    draw.text((0, 0), text, font=font, fill="black", font_align=font_align)
-    img.save("r" + text[0] + ".png")
-    if width < int(args.tape_height):
+    if rotate: 
+        draw.text((0, 0), text, font=font, fill="black", font_align=font_align)
         img = img.rotate(90, PIL.Image.NEAREST, expand=1)
-    return img
+    else:
+        draw.text((0, height/2 - font_size/2), text, font=font, fill="black", font_align=font_align)
+
+    return img, rotate
 
 
 database_load_key_from_json(args.api_key)
 
 qrcodes = []
 labels = []
+rotated = []
 
 font = None
 if args.font:
@@ -180,25 +234,33 @@ with open(args.input, "r") as file:
 
 if args.qrcode:
     for element in elements:
-        qrcodes.append(generate_qrcode(element["BarCode"]))
-        labels.append(text_to_image(build_label_text(element), font, args.font_size))
+        qrcodes.append(generate_qrcode(element["BarCode"], args.qrcode_pixel))
+        label, rotate = text_to_image(build_label_text(element), font, args.font_size)
+         
+        labels.append(label)
+        rotated.append(rotate)
 
-    image = build_tape_image(qrcodes, labels)
-    image.save(args.output)
+    print("QRCODES: ", len(qrcodes))
+    image = build_tape_image(qrcodes, labels, rotated)
+    image.save(args.qrcode)
+
+to_post = []
 
 if args.post:
     for i in range(0, len(elements)):
+        print("----------------", i, "---------------:", elements[i]["Label"])
         keys_to_remove = []
+        if database_get_item(
+            "Items", lambda a: a["BarCode"] == elements[i]["BarCode"]
+        ):
+            continue
+
         for key in elements[i]:
             if (
                 key in first_row
                 and first_row[key] != None
                 and len(first_row[key].strip()) != 0
             ):
-                if database_get_item(
-                    "Items", lambda a: a["Code"] == elements[i]["Code"]
-                ):
-                    continue
                 print("Fixing key: ", key, "with: ", first_row[key])
                 if "ref:" in first_row[key].lower():
                     data = first_row[key].split(":")
@@ -223,14 +285,17 @@ if args.post:
 
                 if first_row[key].lower() == "int":
                     elements[i][key] = str(int(elements[i][key]))
-
+               
                 if first_row[key].lower() == "none":
                     keys_to_remove.append(key)
+            if elements[i][key] == None or str(elements[i][key]).lower() == "none":
+                keys_to_remove.append(key)
         for key in keys_to_remove:
             del elements[i][key]
 
         print("Posting ID: ", i)
-        if database_add_entry("Items", [elements[i]]):
-            print("POST Successful!")
-        else:
-            exit(-1)
+        to_post.append(elements[i])
+    if database_add_entry("Items", to_post):
+        print("POST Successful!")
+    else:
+        exit(-1)
